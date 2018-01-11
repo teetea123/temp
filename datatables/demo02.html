@@ -1,0 +1,264 @@
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.2.1/dt-1.10.16/af-2.2.2/b-1.5.1/b-colvis-1.5.1/cr-1.4.1/fc-3.2.4/fh-3.1.3/kt-2.3.2/r-2.2.1/rg-1.0.2/rr-1.2.3/sc-1.4.3/sl-1.2.4/datatables.min.css"/>
+
+    <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.2.1/dt-1.10.16/af-2.2.2/b-1.5.1/b-colvis-1.5.1/cr-1.4.1/fc-3.2.4/fh-3.1.3/kt-2.3.2/r-2.2.1/rg-1.0.2/rr-1.2.3/sc-1.4.3/sl-1.2.4/datatables.min.js"></script>
+
+    <style>
+        .text-right {
+            text-align: right;
+        }
+        tfoot {
+            /** 让表脚在表头前显示 **/
+            display: table-header-group;
+        }
+        /** 修改颜色，不使用悬浮效果 **/
+        div.dt-button-collection button.dt-button:active:not(.disabled),
+        div.dt-button-collection button.dt-button.active:not(.disabled),
+        div.dt-button-collection div.dt-button:active:not(.disabled),
+        div.dt-button-collection div.dt-button.active:not(.disabled),
+        div.dt-button-collection a.dt-button:active:not(.disabled),
+        div.dt-button-collection a.dt-button.active:not(.disabled),
+        button.dt-button:active:not(.disabled):hover:not(.disabled),
+        button.dt-button.active:not(.disabled):hover:not(.disabled),
+        div.dt-button:active:not(.disabled):hover:not(.disabled),
+        div.dt-button.active:not(.disabled):hover:not(.disabled),
+        a.dt-button:active:not(.disabled):hover:not(.disabled),
+        a.dt-button.active:not(.disabled):hover:not(.disabled)
+        {
+            background-color: #bddef4;
+            background-image: -webkit-linear-gradient(top, #f0f0f0 0%, #dadada 100%);
+            background-image: -moz-linear-gradient(top, #f0f0f0 0%, #dadada 100%);
+            background-image: -ms-linear-gradient(top, #f0f0f0 0%, #dadada 100%);
+            background-image: -o-linear-gradient(top, #f0f0f0 0%, #dadada 100%);
+            background-image: linear-gradient(to bottom, #f0f0f0 0%, #bddef4 100%);
+            filter: progid:DXImageTransform.Microsoft.gradient(GradientType=0,StartColorStr='#f0f0f0', EndColorStr='#dadada');
+            box-shadow: inset 1px 1px 3px #666;
+        }
+        .mydt-toolbar {
+            float: right;
+        }
+        .mydt-toolbar >* {
+            float: none!important;
+            display: inline-block;
+            margin: 0 2px;
+        }
+    </style>
+
+</head>
+<body>
+<table id="myTable"></>
+<script>
+    function initTable(myTable, columnsDef, dataSet) {
+        var $tfootTr = $('<tfoot><tr></tr></tfoot>').appendTo(myTable).find("tr");
+        columnsDef.forEach(function (t) {
+            $('<th></th>').appendTo($tfootTr);
+        });
+        var setSumTitle = function (api) {
+            var $sumTitle = $tfootTr.find('.sumTitle');
+            $sumTitle.html('').removeClass('sumTitle');
+            $sumTitle = $( api.column('0:visIdx').footer() );
+            if ($sumTitle.html() == '') {
+                $sumTitle.html('小计').addClass('sumTitle');
+            }
+        };
+        var $myTable = $(myTable).DataTable( {
+            data: dataSet,
+            columns: columnsDef,
+            colReorder: true,
+            // 会导致复选框不能点击
+//            rowReorder: true,
+            rowReorder: {
+                update: false,
+                selector: 'td.index',
+            },
+//            select: true,
+            select: {
+                style:    'multi',
+//                selector: 'td:first-child',
+                selector: 'td.select-checkbox'
+            },
+            // 布局。processing display element，按钮，搜索，分页长度，分页，表格，信息，分页
+//            dom: 'irflpBtp',
+            "dom": 'i<"mydt-toolbar"rlpfB>t<"clear">',
+            buttons: [
+                'colvis',
+                {
+                    // 自定义按钮
+                    text: 'show select',
+                    action: function () {
+                        $myTable.rows( { selected: true } ).every( function ( rowIdx, tableLoop, rowLoop ) {
+                            var data = this.data();
+                            alert(data.name);
+                        });
+                    }
+                },
+            ],
+//            order: [[ 1, 'asc' ]],
+            order: [],
+            "footerCallback": function ( row, data, start, end, display ) {
+                var api = this.api();
+                // var settings = api.settings()[0];
+                // var columnsDef = settings.aoColumns;
+
+                // Remove the formatting to get integer data for summation
+                var intVal = function ( i ) {
+                    return typeof i === 'string' ?
+                        i.replace(/[\$,]/g, '')*1 :
+                        typeof i === 'number' ?
+                            i : 0;
+                };
+
+                var footerSum = function (columnIndex) {
+                    var sum = api.column(columnIndex).data().reduce( function (a, b) {
+                        return intVal(a) + intVal(b);
+                    }, 0 );
+                    $( api.column( columnIndex ).footer() ).html(sum);
+                };
+
+                setSumTitle(api);
+
+                api.columns('.sum').every( function (columnIndex) {
+                    footerSum(columnIndex);
+                } );
+
+                columnsDef.forEach(function (t, columnIndex) {
+                    if (t.footerRender === 'sum') {
+                        footerSum(columnIndex);
+                    } else if (t.footerRender) {
+                        $( api.column( columnIndex ).footer() ).html(t.footerRender(api.data()));
+                    }
+                })
+
+            }
+        } );
+        //
+        $myTable.on( 'column-visibility.dt', function ( e, settings, column, state ) {
+            setSumTitle($myTable);
+        } );
+        //
+        $myTable.on( 'order.dt search.dt column-reorder', function () {
+            $myTable.column('index:name', {search:'applied', order:'applied'}).nodes().each( function (cell, i) {
+                cell.innerHTML = i+1;
+            } );
+        } ).draw();
+        //
+        $(myTable).find('th input.select-all').on('change', function () {
+            if (this.checked) {
+                $myTable.rows().select();
+            } else {
+                $myTable.rows().deselect();
+            }
+        });
+    }
+
+    var dataSet = [
+        { name:"Tiger Nixon", position:"System Architect", office:"Edinburgh", extn:"5421", startDate:"2011/04/25", one:"10", two:"20", three:"30", salary:"$320,800" },
+        { name:"Garrett Winters", position:"Accountant", office:"Tokyo", extn:"8422", startDate:"2011/07/25", one:"10", two:"20", three:"30", salary:"$170,750" },
+        { name:"Ashton Cox", position:"Junior Technical Author", office:"San Francisco", extn:"1562", startDate:"2009/01/12", one:"10", two:"20", three:"30", salary:"$86,000" },
+        { name:"Cedric Kelly", position:"Senior Javascript Developer", office:"Edinburgh", extn:"6224", startDate:"2012/03/29", one:"10", two:"20", three:"30", salary:"$433,060" },
+        { name:"Airi Satou", position:"Accountant", office:"Tokyo", extn:"5407", startDate:"2008/11/28", one:"10", two:"20", three:"30", salary:"$162,700" },
+        { name:"Brielle Williamson", position:"Integration Specialist", office:"New York", extn:"4804", startDate:"2012/12/02", one:"10", two:"20", three:"30", salary:"$372,000" },
+        { name:"Herrod Chandler", position:"Sales Assistant", office:"San Francisco", extn:"9608", startDate:"2012/08/06", one:"10", two:"20", three:"30", salary:"$137,500" },
+        { name:"Rhona Davidson", position:"Integration Specialist", office:"Tokyo", extn:"6200", startDate:"2010/10/14", one:"10", two:"20", three:"30", salary:"$327,900" },
+        { name:"Colleen Hurst", position:"Javascript Developer", office:"San Francisco", extn:"2360", startDate:"2009/09/15", one:"10", two:"20", three:"30", salary:"$205,500" },
+        { name:"Sonya Frost", position:"Software Engineer", office:"Edinburgh", extn:"1667", startDate:"2008/12/13", one:"10", two:"20", three:"30", salary:"$103,600" },
+        { name:"Jena Gaines", position:"Office Manager", office:"London", extn:"3814", startDate:"2008/12/19", one:"10", two:"20", three:"30", salary:"$90,560" },
+        { name:"Quinn Flynn", position:"Support Lead", office:"Edinburgh", extn:"9497", startDate:"2013/03/03", one:"10", two:"20", three:"30", salary:"$342,000" },
+        { name:"Charde Marshall", position:"Regional Director", office:"San Francisco", extn:"6741", startDate:"2008/10/16", one:"10", two:"20", three:"30", salary:"$470,600" },
+        { name:"Haley Kennedy", position:"Senior Marketing Designer", office:"London", extn:"3597", startDate:"2012/12/18", one:"10", two:"20", three:"30", salary:"$313,500" },
+        { name:"Tatyana Fitzpatrick", position:"Regional Director", office:"London", extn:"1965", startDate:"2010/03/17", one:"10", two:"20", three:"30", salary:"$385,750" },
+        { name:"Michael Silva", position:"Marketing Designer", office:"London", extn:"1581", startDate:"2012/11/27", one:"10", two:"20", three:"30", salary:"$198,500" },
+        { name:"Paul Byrd", position:"Chief Financial Officer (CFO)", office:"New York", extn:"3059", startDate:"2010/06/09", one:"10", two:"20", three:"30", salary:"$725,000" },
+        { name:"Gloria Little", position:"Systems Administrator", office:"New York", extn:"1721", startDate:"2009/04/10", one:"10", two:"20", three:"30", salary:"$237,500" },
+        { name:"Bradley Greer", position:"Software Engineer", office:"London", extn:"2558", startDate:"2012/10/13", one:"10", two:"20", three:"30", salary:"$132,000" },
+        { name:"Dai Rios", position:"Personnel Lead", office:"Edinburgh", extn:"2290", startDate:"2012/09/26", one:"10", two:"20", three:"30", salary:"$217,500" },
+        { name:"Jenette Caldwell", position:"Development Lead", office:"New York", extn:"1937", startDate:"2011/09/03", one:"10", two:"20", three:"30", salary:"$345,000" },
+        { name:"Yuri Berry", position:"Chief Marketing Officer (CMO)", office:"New York", extn:"6154", startDate:"2009/06/25", one:"10", two:"20", three:"30", salary:"$675,000" },
+        { name:"Caesar Vance", position:"Pre-Sales Support", office:"New York", extn:"8330", startDate:"2011/12/12", one:"10", two:"20", three:"30", salary:"$106,450" },
+        { name:"Doris Wilder", position:"Sales Assistant", office:"Sidney", extn:"3023", startDate:"2010/09/20", one:"10", two:"20", three:"30", salary:"$85,600" },
+        { name:"Angelica Ramos", position:"Chief Executive Officer (CEO)", office:"London", extn:"5797", startDate:"2009/10/09", one:"10", two:"20", three:"30", salary:"$1,200,000" },
+        { name:"Gavin Joyce", position:"Developer", office:"Edinburgh", extn:"8822", startDate:"2010/12/22", one:"10", two:"20", three:"30", salary:"$92,575" },
+        { name:"Jennifer Chang", position:"Regional Director", office:"Singapore", extn:"9239", startDate:"2010/11/14", one:"10", two:"20", three:"30", salary:"$357,650" },
+        { name:"Brenden Wagner", position:"Software Engineer", office:"San Francisco", extn:"1314", startDate:"2011/06/07", one:"10", two:"20", three:"30", salary:"$206,850" },
+        { name:"Fiona Green", position:"Chief Operating Officer (COO)", office:"San Francisco", extn:"2947", startDate:"2010/03/11", one:"10", two:"20", three:"30", salary:"$850,000" },
+        { name:"Shou Itou", position:"Regional Marketing", office:"Tokyo", extn:"8899", startDate:"2011/08/14", one:"10", two:"20", three:"30", salary:"$163,000" },
+        { name:"Michelle House", position:"Integration Specialist", office:"Sidney", extn:"2769", startDate:"2011/06/02", one:"10", two:"20", three:"30", salary:"$95,400" },
+        { name:"Suki Burks", position:"Developer", office:"London", extn:"6832", startDate:"2009/10/22", one:"10", two:"20", three:"30", salary:"$114,500" },
+        { name:"Prescott Bartlett", position:"Technical Author", office:"London", extn:"3606", startDate:"2011/05/07", one:"10", two:"20", three:"30", salary:"$145,000" },
+        { name:"Gavin Cortez", position:"Team Leader", office:"San Francisco", extn:"2860", startDate:"2008/10/26", one:"10", two:"20", three:"30", salary:"$235,500" },
+        { name:"Martena Mccray", position:"Post-Sales support", office:"Edinburgh", extn:"8240", startDate:"2011/03/09", one:"10", two:"20", three:"30", salary:"$324,050" },
+        { name:"Unity Butler", position:"Marketing Designer", office:"San Francisco", extn:"5384", startDate:"2009/12/09", one:"10", two:"20", three:"30", salary:"$85,675" }
+    ];
+
+    var columnsDef = [
+        {
+            title: '<input type="checkbox" class="select-all">全选',
+            data: null,
+            orderable: false,
+            "searchable": false,
+            className: 'select-checkbox',
+            render: function () {
+                return '';
+            }
+        },
+        {
+            title: 'index',
+            name: 'index',
+            data: null,
+            orderable: false,
+            "searchable": false,
+            className: "text-right index",
+        },
+        {
+            title: "Name",
+            data: "name",
+        },
+        {
+            title: "Position",
+            data: "position",
+        },
+        {
+            title: "Office",
+            data: "office",
+        },
+        {
+            title: "Extn.",
+            data: "extn",
+            "visible": false,
+        },
+        {
+            title: "Start date",
+            data: "startDate",
+        },
+        {
+            title: "one",
+            data: "one",
+            footerRender: "sum",
+            className: "text-right",
+        },
+        {
+            title: "two",
+            data: "two",
+            className: "text-right",
+            footerRender: "sum",
+        },
+        {
+            title: "three",
+            data: "three",
+            className: "text-right",
+            footerRender: "sum",
+        },
+        {
+            title: "Salary",
+            data: "salary",
+            className: "text-right sum",
+        }
+    ];
+
+    $(document).ready(function() {
+        initTable('#myTable', columnsDef, dataSet);
+    } );
+</script>
+</body>
+</html>
