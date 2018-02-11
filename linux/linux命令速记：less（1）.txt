@@ -1,0 +1,164 @@
+linux命令速记：less（1）.txt
+
+http://www.tutorialspoint.com/unix_commands/less.htm
+
+========
+示例
+
+less xxx.txt
+
+less xxx1.txt xxx2.txt
+
+ps aux|grep java|less
+
+========
+命令行选项
+
+-F
+如果只需要一屏幕，自动退出。
+
+-i
+搜索时，小写能匹配大写。
+
+-I
+搜索时，忽略大小写。
+
+-N
+显示行号。
+
+-r
+裸控制字符，颜色。
+
+-R
+裸控制字符，颜色。
+
+========
+操作
+
+g
+跳到第一行。
+
+G
+跳到最后一行。
+
+30g
+30G
+跳到第三十行。
+
+f
+空格键
+向下一屏幕。
+
+j
+回车
+e
+向下一行。
+
+3j
+向下三行。
+
+b
+向上一屏幕。
+
+k
+y
+向上一行。
+
+3k
+向上三行。
+
+左箭头，右箭头
+
+0p
+50p
+100p
+跳到百分之几的位置。
+数字从 0 到 100 。
+
+F
+监视文件尾，当文件持续更新时。
+
+m
+用字母标记当前位置。
+
+'
+跳到字母标记的位置。
+
+=
+当前信息。
+
+q
+退出。
+
+========
+操作
+
+&xxx
+正则表达式，只显示匹配的行。
+
+& 回车，
+重新显示所有行。
+
+/xxx
+正则表达式，跳到匹配的行。
+高亮所有的匹配。
+
+?xxx
+正则表达式，向上搜索。
+
+按下 & / ? 之后，再按以下特殊字符进入特殊行为，再输入正则表达式。
+
+ctrl N
+!
+取反（即不匹配的行）。
+
+ctrl R
+正则表达式视为普通字符串。
+
+ctrl K
+高亮当前屏幕匹配的文本，但不移动到第一处匹配。
+
+========
+操作
+
+n
+继续搜索。
+
+N
+继续搜索，反方向。
+
+========
+操作
+
+! shell-command
+Invokes a shell to run the shell-command given.
+A percent sign (%) in the command is replaced by the name of the current file.
+A pound sign (#) is replaced by the name of the previously examined file.
+"!!" repeats the last shell command.
+"!" with no shell command simply invokes a shell.
+On Unix systems, the shell is taken from the environment variable SHELL,
+or defaults to "sh".
+On MS-DOS and OS/2 systems, the shell is the normal command processor.
+
+执行壳命令。
+
+========
+操作
+
+:d
+从文件列表中，移除文件。
+
+:p
+前一个文件。
+前第n个文件。
+
+:n
+后一个文件。
+后第n个文件。
+
+:e
+添加新文件到列表中。
+
+v
+使用编辑器。
+
