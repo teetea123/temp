@@ -1,0 +1,117 @@
+linux命令速记：grep.txt
+
+========
+语法：
+
+grep [OPTIONS] PATTERN [FILE...]
+grep [OPTIONS] [-e PATTERN | -f FILE] [FILE...]
+
+-e 用于有多个正则表达式（或字符串）时。
+-f 用于有多个文件时。
+
+========
+-F ，表示搜索字符串（而不是正则表达式）：
+
+grep -F 'xxx' ffffilename.txt
+
+grep -F 'xxx\nyyy' ffffilename.txt
+
+hxzon：
+文档说可以用换行符表示搜索两个字符串，
+但实际执行时，不能匹配 xxx 也不能匹配 yyy ，
+\n 是匹配“斜杠”和 n 这两个字符。
+
+========
+搜索两个正则表达式：
+
+grep -e 'xxx' -e 'yyy' ffffilename.txt
+
+搜索两个字符串（不是正则表达式）：
+
+grep -e 'xxx' -e 'y.y' ffffilename.txt -F
+
+========
+搜索 532，533，534 ：
+
+grep -e '53[2|3|4]' ffffilename.txt
+
+========
+搜索同时包含 xxx 和 yyy 的行：
+
+grep -e 'xxx.*yyy' ffffilename.txt
+
+========
+-m 10
+
+最多匹配10行，然后跳过该文件。
+
+-i
+-y
+
+正则表达式和输入文件，都忽略大小写。
+
+-v
+
+反向选择，即打印不匹配的行。
+
+-c
+
+打印匹配（或不匹配）的行数。
+
+-o
+
+只打印匹配的部分，而不是一整行。
+如果一行有多个匹配的部分，会打印多行。
+
+-n
+
+打印行号。从1开始。
+
+-A 10
+
+同时打印匹配行的前10行。
+
+-B 10
+
+同时打印匹配行的后10行。
+
+-C 3
+
+同时打印匹配行的前后各3行。
+
+-w
+
+匹配整个单词。
+
+-x
+
+精确匹配整行。
+
+========
+-R, -r
+
+递归每个文件夹。
+不成功，
+
+grep -F -e 'setPrizeSent' -m 1 -f `find ./* -type f`
+
+--exclude=GLOB
+
+根据文件名通配符，跳过这些文件。
+
+--exclude-from=FILE
+
+从文件读取文件名通配符，跳过这些文件。
+
+--exclude-dir=DIR
+
+跳过指定的目录。
+
+--include=GLOB
+
+指定文件名通配符，只搜索这些文件。
+
+-I
+
+不匹配二进制文件。
+
