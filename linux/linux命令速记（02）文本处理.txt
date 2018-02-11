@@ -1,0 +1,97 @@
+linux命令速记（02）文本处理.txt
+
+========
+xargs
+
+参数代换。
+会使用 xargs 的原因是， 很多命令其实并不支持管线命令，
+因此我们可以透过 xargs 来让该命令引用 standard input 。
+
+xargs [-0epn] command
+
+选项与参数：
+-0  ：如果输入的 stdin 含有特殊字符，例如 `, \, 空格键等等字符时，
+这个 -0 参数可以将他还原成一般字符。
+这个参数可以用于特殊状态。
+
+-e  ：这个是 EOF (end of file) 的意思。
+后面可以接一个字符串，当 xargs 分析到这个字符串时，就会停止继续工作。
+
+-p  ：在运行每个命令的 argument 时，都会询问使用者的意思；
+
+-n  ：后面接次数，每次 command 命令运行时，要使用几个参数的意思。
+
+当 xargs 后面没有接任何的命令时，默认是以 echo 来进行输出。
+
+示例：
+
+cut -d':' -f1 /etc/passwd |head -n 3| xargs finger
+
+将 /etc/passwd 内的第一栏取出，仅取三行，
+使用 finger 这个命令将每个账号内容秀出来。
+
+cut -d':' -f1 /etc/passwd |head -n 3| xargs -p finger
+
+同上，但是每次运行 finger 时，都要询问使用者是否动作。
+
+cut -d':' -f1 /etc/passwd | xargs -p -n 5 finger
+
+将所有的 /etc/passwd 内的账号都以 finger 查阅，但一次仅查阅五个账号。
+
+cut -d':' -f1 /etc/passwd | xargs -p -e'lp' finger
+
+同上，但是当分析到 lp 就结束这串命令。
+
+====
+find /sbin -perm +7000 | ls -l
+
+找出 /sbin 底下具有特殊权限的档名，并使用 ls -l 列出详细属性。
+
+结果仅有列出 root 所在目录下的文件，这不是我们要的。
+这是因为 ll (ls) 并不是管线命令。
+
+find /sbin -perm +7000 | xargs ls -l
+
+========
+more
+ps aux|more
+
+分页显示。
+按回车进入下一行。
+没办法往前翻。
+-数字 ，表示每屏多少行。
+优点是，退出后，屏幕上仍保留信息。
+
+====
+head
+
+显示开头几行。
+
+====
+tail
+
+显示末尾几行。
+
+-f 持续显示末尾。
+-n 12 显示末尾十二行。
+
+====
+cat
+
+-A 显示出所有特殊按键。
+
+cat termcap* >> termcapback
+文件拼接。
+
+========
+grep
+
+逐行匹配，如果匹配，就取出该行。
+
+-a ：将 binary 文件以 text 文件的方式搜寻数据
+-c ：计算找到 '搜寻字符串' 的次数
+-i ：忽略大小写的不同，所以大小写视为相同
+-n ：顺便输出行号
+-v ：反向选择，亦即显示出没有 '搜寻字符串' 内容的那一行！
+--color=auto ：将找到的关键词部分加上颜色。
+
