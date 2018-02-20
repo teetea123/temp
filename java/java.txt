@@ -1,0 +1,18 @@
+java.txt
+
+========
+jps
+查看有哪些Java进程，得到pid
+
+top -Hp pidxxx
+查看哪个线程cpu高
+
+或者直接 htop ，可以看到所有的进程和线程 id 。
+
+printf "%x\n" tidxxx
+
+把线程id转成16进制，
+因为在 jstack 中，tid 是 16进制
+
+jstack pidxxx |grep tid16xxx -A 30
+
