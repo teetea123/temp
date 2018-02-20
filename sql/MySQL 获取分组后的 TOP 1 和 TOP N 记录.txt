@@ -1,0 +1,15 @@
+MySQL 获取分组后的 TOP 1 和 TOP N 记录.txt
+
+http://sangei.iteye.com/blog/2359584
+
+select a.name,a.course,a.score
+from test1 a
+left join test1 b
+on a.course=b.course and a.score<b.score
+group by a.name,a.course,a.score
+having count(b.id)<2
+order by a.course,a.score desc;
+
+先按“课程，分数小于”关联。
+再按“人，课程，分数”分组。
+取“没有小于，或只小于若干个”的（即top n）。
