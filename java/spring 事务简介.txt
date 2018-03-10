@@ -1,0 +1,345 @@
+spring 事务简介.txt
+
+========
+1，spring 事务的实现和使用方式，可细分为四小种。
+
+基于 jdk 代理。
+基于 cglib 代理。
+运行时 aspectj 织入。
+编译时 aspectj 织入。
+
+前两种方式，属于代理模式。
+代理模式有一些限制，
+就是私有方法，自身调用，无法应用事务。
+例如：
+
+public class XxxServiceImpl implements XxxService {
+
+    // 私有方法，所以没有事务
+    @Transactional
+    private a() {xxx}
+
+    // 如果外部直接调用，有事务
+    @Transactional
+    public b() {xxx}
+
+    public c() {
+        // 自身调用，因为 c 没有事务，所以 b 也没有事务，因为不经过代理
+        b();
+    }
+
+    @Transaction
+    public d() {
+        // 自身调用，如果 d 有事务（外部直接调用 d 时），则 b 也有事务
+        b();
+    }
+}
+
+其中，jdk 代理需要目标类有接口。
+cglib 则不需要。
+spring 默认使用代理模式，
+会根据目标类是不是有接口，
+自动选择 jdk 代理还是 cglib 代理。
+也可以显示配置用哪种。
+
+后两种，属于字节码织入模式。
+所以没有“私有方法、自身调用”这些问题。
+
+运行时织入，需要配置 jvm agent 参数，
+有时会比较繁琐，例如在 tomcat ，jetty 等容器里运行时。
+运行时织入，也会稍微影响类的加载时间。
+
+所以个人比较推崇“编译时织入”。
+
+参考资料一：
+
+AbstractFallbackTransactionAttributeSource
+
+protected TransactionAttribute computeTransactionAttribute(Method method, Class<?> targetClass) {
+    // Don't allow no-public methods as required.
+    if (allowPublicMethodsOnly() && !Modifier.isPublic(method.getModifiers())) {
+        return null;
+    }
+    // ...
+}
+
+========
+2，事务传播类型
+
+参考资料一：
+http://docs.spring.io/spring/docs/4.2.2.BUILD-SNAPSHOT/spring-framework-reference/htmlsingle/#transaction
+
+====
+Required
+
+图：tx prop required
+
+PROPAGATION_REQUIRED
+
+When the propagation setting is PROPAGATION_REQUIRED,
+a logical transaction scope is created for each method upon which the setting is applied.
+Each such logical transaction scope
+can determine rollback-only status individually,
+with an outer transaction scope
+being logically independent from the inner transaction scope.
+Of course, in case of standard PROPAGATION_REQUIRED behavior,
+all these scopes will be mapped to the same physical transaction.
+
+So a rollback-only marker set in the inner transaction scope
+does affect the outer transaction’s chance to actually commit
+(as you would expect it to).
+
+每个方法创建一个逻辑事务范围。
+所有这些事务范围，对应一个物理事务。
+所以，内部事务的回滚标记，会影响外部事务的提交。
+
+However, in the case where an inner transaction scope sets the rollback-only marker,
+the outer transaction has not decided on the rollback itself,
+and so the rollback (silently triggered by the inner transaction scope) is unexpected.
+A corresponding UnexpectedRollbackException is thrown at that point.
+
+This is expected behavior
+so that the caller of a transaction can never be misled to assume that
+a commit was performed when it really was not.
+So if an inner transaction (of which the outer caller is not aware)
+silently marks a transaction as rollback-only,
+the outer caller still calls commit.
+The outer caller needs to receive an UnexpectedRollbackException
+to indicate clearly that a rollback was performed instead.
+
+异常：UnexpectedRollbackException
+
+内部事务需要回滚时，会抛出一个异常，
+调用者会收到异常。
+
+====
+RequiresNew
+
+图：tx prop requires new
+
+PROPAGATION_REQUIRES_NEW
+
+PROPAGATION_REQUIRES_NEW,
+in contrast to PROPAGATION_REQUIRED,
+uses a completely independent transaction for each affected transaction scope.
+In that case, the underlying physical transactions are different
+and hence can commit or roll back independently,
+with an outer transaction not affected by an inner transaction’s rollback status.
+
+每个事务范围都是完全独立的事务。
+内部事务不影响外部事务。
+
+====
+Nested
+
+PROPAGATION_NESTED uses a single physical transaction
+with multiple savepoints that it can roll back to.
+Such partial rollbacks allow an inner transaction scope to trigger a rollback for its scope,
+with the outer transaction being able to continue the physical transaction
+despite some operations having been rolled back.
+This setting is typically mapped onto JDBC savepoints,
+so will only work with JDBC resource transactions.
+See Spring’s DataSourceTransactionManager.
+
+使用一个物理事务，多个保存点。
+内部事务回滚，外部事务仍能够继续。
+（despite：尽管）
+
+参考资料二：
+org.springframework.transaction.annotation.Propagation
+http://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/transaction/annotation/Propagation.html
+
+==
+REQUIRED
+Support a current transaction,
+create a new one if none exists.
+
+Analogous to EJB transaction attribute of the same name.
+This is the default setting of a transaction annotation.
+
+如果有事务，使用当前事务。
+如果没有事务，创建事务。
+这是默认值。
+
+==
+SUPPORTS
+
+Support a current transaction,
+execute non-transactionally if none exists.
+
+Analogous to EJB transaction attribute of the same name.
+Note: For transaction managers with transaction synchronization,
+PROPAGATION_SUPPORTS is slightly different from no transaction at all,
+as it defines a transaction scope that synchronization will apply for.
+As a consequence, the same resources (JDBC Connection, Hibernate Session, etc)
+will be shared for the entire specified scope.
+Note that this depends on the actual synchronization configuration of the transaction manager.
+
+如果有事务，使用当前事务。
+如果没有事务，不使用事务。
+
+See Also:
+AbstractPlatformTransactionManager.setTransactionSynchronization(int)
+
+==
+MANDATORY
+
+Support a current transaction,
+throw an exception if none exists.
+Analogous to EJB transaction attribute of the same name.
+
+如果有事务，使用当前事务。
+如果没有事务，抛出异常。
+
+==
+REQUIRES_NEW
+
+Create a new transaction,
+and suspend the current transaction if one exists.
+
+Analogous to the EJB transaction attribute of the same name.
+NOTE: Actual transaction suspension will not work out-of-the-box on all transaction managers.
+This in particular applies to JtaTransactionManager,
+which requires the javax.transaction.TransactionManager to be made available it to it
+(which is server-specific in standard Java EE).
+
+如果有事务，暂停当前事务，然后创建新事务。
+
+注意，不是所有的事务管理器都支持“事务暂停”。
+
+See Also:
+JtaTransactionManager.setTransactionManager(javax.transaction.TransactionManager)
+
+==
+NOT_SUPPORTED
+
+Execute non-transactionally,
+suspend the current transaction if one exists.
+
+Analogous to EJB transaction attribute of the same name.
+NOTE: Actual transaction suspension will not work out-of-the-box on all transaction managers.
+This in particular applies to JtaTransactionManager,
+which requires the javax.transaction.TransactionManager to be made available it to it
+(which is server-specific in standard Java EE).
+
+不使用事务。
+如果有事务，暂停事务。
+
+See Also:
+JtaTransactionManager.setTransactionManager(javax.transaction.TransactionManager)
+
+==
+NEVER
+
+Execute non-transactionally, throw an exception if a transaction exists.
+
+Analogous to EJB transaction attribute of the same name.
+
+不允许有事务。
+如果有事务，抛出异常。
+
+==
+NESTED
+
+Execute within a nested transaction if a current transaction exists,
+behave like PROPAGATION_REQUIRED else.
+
+There is no analogous feature in EJB.
+Note: Actual creation of a nested transaction will only work on specific transaction managers.
+Out of the box, this only applies to the JDBC DataSourceTransactionManager when working on a JDBC 3.0 driver.
+Some JTA providers might support nested transactions as well.
+
+如果有事务，使用内嵌事务。
+如果没有事务，创建事务。
+
+注意，不是所有的事务管理器都支持“内嵌事务”。
+
+See Also:
+DataSourceTransactionManager
+
+========
+个人见解：多数情况下，都是 Require （默认值）最适用。
+
+========
+3，异常回滚
+
+在单独使用不带任何参数的 @Transactional 注释时，
+传播模式为 REQUIRED，
+只读标志为 false，
+事务隔离级别为 READ_COMMITTED，
+只有 RuntimeException 和 Error 会回滚，
+不会针对受控异常（checked exception）回滚。
+
+通过 @Transactional 的下面两个属性，可以指定哪些异常要回滚，哪些异常不回滚。
+
+rollback-for
+如果抛出这些指定的异常类型（包括子类），则回滚事务。
+如果有多个异常类型需要指定，各类型之间可以通过逗号分隔。
+
+no-rollback-for
+如果抛出这些指定的异常类型，
+不回滚事务。
+
+参考资料一：
+TransactionAspectSupport
+
+参考资料二：
+DefaultTransactionAttribute
+
+/**
+ * The default behavior is as with EJB: rollback on unchecked exception
+ * ({@link RuntimeException}), assuming an unexpected outcome outside of any
+ * business rules. Additionally, we also attempt to rollback on {@link Error} which
+ * is clearly an unexpected outcome as well. By contrast, a checked exception is
+ * considered a business exception and therefore a regular expected outcome of the
+ * transactional business method, i.e. a kind of alternative return value which
+ * still allows for regular completion of resource operations.
+ * <p>This is largely consistent with TransactionTemplate's default behavior,
+ * except that TransactionTemplate also rolls back on undeclared checked exceptions
+ * (a corner case). For declarative transactions, we expect checked exceptions to be
+ * intentionally declared as business exceptions, leading to a commit by default.
+ * @see org.springframework.transaction.support.TransactionTemplate#execute
+ */
+// 受检异常视为业务异常。
+// 注意，TransactionTemplate 对未声明的受检异常，也会回滚。
+public boolean rollbackOn(Throwable ex) {
+    return (ex instanceof RuntimeException || ex instanceof Error);
+}
+
+参考资料三：
+http://www.ibm.com/developerworks/cn/java/j-ts1.html
+
+为什么受检异常不自动回滚？
+尽管这种行为看起来很奇怪，但这样做自有它的道理。
+首先，不是所有受控异常都是不好的；它们可用于事件通知或根据某些条件重定向处理。
+但更重要的是，应用程序代码会对某些类型的受控异常采取纠正操作，从而使事务全部完成。
+例如，考虑下面一种场景：您正在为在线书籍零售商编写代码。
+要完成图书的订单，您需要将电子邮件形式的确认函作为订单处理的一部分发送。
+如果电子邮件服务器关闭，您将发送某种形式的 SMTP 受控异常，表示邮件无法发送。
+如果受控异常引起自动回滚，整个图书订单就会由于电子邮件服务器的关闭全部回滚。
+通过禁止自动回滚受控异常，您可以捕获该异常并执行某种纠正操作（如向挂起队列发送消息），然后提交剩余的订单。
+
+参考资料四：
+RollbackRuleAttribute 的 getDepth 方法
+
+private int getDepth(Class<?> exceptionClass, int depth) {
+    if (exceptionClass.getName().contains(this.exceptionName)) {
+        // Found it!
+        return depth;
+    }
+    // If we've gone as far as we can go and haven't found it...
+    if (exceptionClass == Throwable.class) {
+        return -1;
+    }
+    return getDepth(exceptionClass.getSuperclass(), depth + 1);
+}
+
+========
+4，验证是否使用了事务
+
+开启日志：
+
+<logger name="org.springframework.aop" level="DEBUG" />
+<logger name="org.springframework.transaction" level="DEBUG" />
+<logger name="org.springframework.orm" level="DEBUG" />
+
