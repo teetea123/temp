@@ -66,6 +66,8 @@ protected TransactionAttribute computeTransactionAttribute(Method method, Class<
 ========
 2，事务传播类型
 
+个人见解：多数情况下，都是 Require （默认值）最适用。
+
 参考资料一：
 http://docs.spring.io/spring/docs/4.2.2.BUILD-SNAPSHOT/spring-framework-reference/htmlsingle/#transaction
 
@@ -258,9 +260,6 @@ See Also:
 DataSourceTransactionManager
 
 ========
-个人见解：多数情况下，都是 Require （默认值）最适用。
-
-========
 3，异常回滚
 
 在单独使用不带任何参数的 @Transactional 注释时，
@@ -322,6 +321,16 @@ http://www.ibm.com/developerworks/cn/java/j-ts1.html
 参考资料四：
 RollbackRuleAttribute 的 getDepth 方法
 
+/**
+ * Return the depth of the superclass matching.
+ * <p>{@code 0} means {@code ex} matches exactly. Returns
+ * {@code -1} if there is no match. Otherwise, returns depth with the
+ * lowest depth winning.
+ */
+public int getDepth(Throwable ex) {
+    return getDepth(ex.getClass(), 0);
+}
+
 private int getDepth(Class<?> exceptionClass, int depth) {
     if (exceptionClass.getName().contains(this.exceptionName)) {
         // Found it!
@@ -342,4 +351,114 @@ private int getDepth(Class<?> exceptionClass, int depth) {
 <logger name="org.springframework.aop" level="DEBUG" />
 <logger name="org.springframework.transaction" level="DEBUG" />
 <logger name="org.springframework.orm" level="DEBUG" />
+
+========
+5，自定义注解
+
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Transactional("order")
+public @interface OrderTx {
+}
+
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Transactional("account")
+public @interface AccountTx {
+}
+
+allows us to write the example from the previous section as
+
+public class TransactionalService {
+
+    @OrderTx
+    public void setSomething(String name) { ... }
+
+    @AccountTx
+    public void doSomething() { ... }
+}
+
+Here we have used the syntax to define the transaction manager qualifier,
+but could also have included propagation behavior, rollback rules, timeouts etc.
+
+========
+6，事务隔离级别
+
+https://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/transaction/annotation/Isolation.html
+
+DEFAULT
+public static final Isolation DEFAULT
+Use the default isolation level of the underlying datastore.
+All other levels correspond to the JDBC isolation levels.
+See Also:
+Connection
+
+使用底层数据库默认值。
+
+READ_UNCOMMITTED
+public static final Isolation READ_UNCOMMITTED
+A constant indicating that dirty reads, non-repeatable reads and phantom reads can occur.
+This level allows a row changed by one transaction to be read by another transaction
+before any changes in that row have been committed (a "dirty read").
+If any of the changes are rolled back,
+the second transaction will have retrieved an invalid row.
+See Also:
+Connection.TRANSACTION_READ_UNCOMMITTED
+
+读未提交。
+
+READ_COMMITTED
+public static final Isolation READ_COMMITTED
+A constant indicating that dirty reads are prevented;
+non-repeatable reads and phantom reads can occur.
+This level only prohibits a transaction from reading a row with uncommitted changes in it.
+See Also:
+Connection.TRANSACTION_READ_COMMITTED
+
+读已提交。
+可能发生“不可重复读”，“幻读”。
+
+REPEATABLE_READ
+public static final Isolation REPEATABLE_READ
+A constant indicating that dirty reads and non-repeatable reads are prevented;
+phantom reads can occur.
+This level prohibits a transaction from reading a row with uncommitted changes in it,
+and it also prohibits the situation where one transaction reads a row,
+a second transaction alters the row,
+and the first transaction rereads the row,
+getting different values the second time (a "non-repeatable read").
+See Also:
+Connection.TRANSACTION_REPEATABLE_READ
+
+可重复读。
+可能“幻读”。
+
+SERIALIZABLE
+public static final Isolation SERIALIZABLE
+A constant indicating that dirty reads, non-repeatable reads and phantom reads are prevented.
+This level includes the prohibitions in ISOLATION_REPEATABLE_READ and further prohibits the situation
+where one transaction reads all rows that satisfy a WHERE condition,
+a second transaction inserts a row that satisfies that WHERE condition,
+and the first transaction rereads for the same condition,
+retrieving the additional "phantom" row in the second read.
+See Also:
+Connection.TRANSACTION_SERIALIZABLE
+
+串行化。
+不会“幻读”。
+
+========
+7，
+
+https://docs.spring.io/spring-boot/docs/current/reference/html/common-application-properties.html
+
+# TRANSACTION (TransactionProperties)
+spring.transaction.default-timeout=
+# Default transaction timeout.
+If a duration suffix is not specified, seconds will be used.
+
+spring.transaction.rollback-on-commit-failure=
+# Whether to roll back on commit failures.
+
+
 
