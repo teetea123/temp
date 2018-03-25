@@ -1,0 +1,153 @@
+v2版本
+
+每个代理可有多条线，每条线可有一个佣金方案。
+佣金方案内容：
+游戏（平台+游戏）=》档次（档次条件，档次佣金比例）
+
+佣金方案：
+所属线。
+佣金方案编号
+创建时间。
+结算周期类型：自然月，自然周，自然两周，任意时长。
+首期开始时间（可针对每个人？）。
+结算时间（使用“偏移量（相对结算周期）”？）。
+-- 生效时间（生效时间应该基于人，而不是方案本身）。
+
+佣金方案与人的绑定：
+创建时间（绑定时间）。
+生效时间：当前，或上个方案的本周期结束时间。
+失效时间。
+
+佣金“提案”编号：yyyyMMddyyyyMMdd（起止时间）
+
+====
+佣金方案的生效时间
+
+应该从代理的角度来看。
+某个时间点，（某条线）对应哪条佣金方案。
+佣金方案产生新版本时，视为自动给相关代理更换“新佣金方案”。
+
+给代理添加、更换方案（包括方案产生新版本）时：
+如果代理当前没有“有效”方案，则，
+生效时间：当前，
+失效时间：生效时间（即当前）+五年。
+状态：生效。
+如果已有“有效”方案，则，
+生效时间：上个方案的本周期结束时间。
+失效时间：生效时间+五年。
+状态：待生效（下期生效）。
+同时上个方案的失效时间改为：上个方案的本周期结束时间。
+
+每个代理每条线上的佣金方案绑定的“生效时间，失效时间”，
+相互衔接，不重叠（但可以有空隙）。
+
+// 添加或变更“佣金方案绑定”
+@Transactional
+void addOrChangeAgentContract(Agent agent, Contract contract) {
+    Date now = new Date();
+    // 指定时间点的“当前”方案绑定
+    // select * from agentContract where effectiveStartDate <= now order by effectiveStartDate desc limit 1
+    AgentContract agentContractCurrent = findAgentContractCurrent(agent.agentName, contract.line, now);
+    // 指定时间点的“待生效”方案绑定
+    // select * from agentContract where effectiveStartDate >= now order by effectiveStartDate asc limit 1
+    AgentContract agentContractNextOrig = findAgentContractNext(agent.agentName, contract.line, now);
+    if (agentContractNextOrig != null) {
+        // 删除原来的“待生效”绑定
+        dbMarkDelete_agentContract(agentContractNextOrig);
+    }
+    Date effectiveStartDate = calEffectiveStartDate();
+    //
+    if (agentContractCurrent != null) {
+        // 修改“老绑定”的失效时间
+        agentContractCurrent.effectiveEndDate = effectiveStartDate;
+        dbUpdate_agentContract(agentContractCurrent);
+    }
+    // 新绑定
+    AgentContract agentContractNext = new AgentContract();
+    agentContractNext.effectiveStartDate = effectiveStartDate;
+    agentContractNext.effectiveEndDate = effectiveStartDate + fiveYears;
+    dbInsert_agentContract(agentContractNext);
+}
+
+Date calEffectiveStartDate() {
+
+}
+
+// 修改佣金方案（产生新版本）
+@Transactional
+void updateContractContent(Contract contractNew) {
+    Date now = new Date();
+    Contract contractCurrentVersion = findContract(contractNew.contractCode, now);
+    dbInsert_contract(contractNew);
+    // “当前正和本方案绑定的”代理
+    List<AgentContract> agentContracts = findAgentContract(contractNew.contractCode, now);
+    for (AgentContract agentContract: agentContracts) {
+        AgentContract agentContractNextOrig = findAgentContractNext(agentContract.agentName, agentContract.line, now);
+        if (agentContractNextOrig == null) {
+            addOrChangeAgentContract(agentContract.agentName, contractNew);
+        }
+        else if (agentContractNextOrig.contractCode != contractNew.contractCode) {
+            // 该代理“即将”变更为其它方案，已经与本方案的新版本无关
+            continue;
+        } else {
+            // 该方案之前就产生过一个版本（记为a1），现在又再次产生一个版本（记为a2）
+            // agentContact_a1 会被删除
+            addOrChangeAgentContract(agentContract.agentName, contractNew);
+        }
+    }
+}
+
+某个时间点，（某条线）对应哪条佣金方案：
+select * from t_agent_contract
+where effective_start_date >= #{time}
+and effective_end_date <= #{time}
+and flag != 'delete'
+and agent_name = 'xxx';
+
+佣金“提案”实际开始时间（代理+佣金方案+佣金方案绑定）：
+-1，代理加入时间。
+-2，上个周期结束时间（总是大于等于代理开始时间）。
+-3，代理佣金启用时间（可以简化去除）。
+-4，佣金方案首期开始时间（针对每个人？）。
+-5，佣金方案本周期开始时间。
+取上述所有值的最大值。
+
+====
+佣金方案状态：
+删除。
+有效。
+-- 生效（当前），待生效（下周期生效），历史。
+
+注：佣金方案本身无所谓“待生效”。
+
+“佣金方案与人的绑定”状态：
+删除。
+有效。
+-- 生效（当前），待生效（下周期生效），历史。
+
+注：“生效时间”和“失效时间”，
+决定了“生效，待生效，历史”这三种状态。
+
+====
+佣金结算流程一：
+结算时间点
+=》所有代理（有下线的，佣金开启的）
+=》该代理的每个佣金方案
+=》佣金方案的结算周期
+=》佣金提案的实际起止时间
+=》下线的贡献信息（按“实际起止时间+下线登录名”缓存）
+=》计算佣金
+
+佣金结算流程二：
+结算时间点
+=》所有佣金方案
+=》该方案对应的每个代理
+=》佣金方案的结算周期
+=》佣金提案的实际起止时间
+=》下线的贡献信息（按“实际起止时间+下线登录名”缓存）
+=》计算佣金
+
+====
+修改佣金方案的内容：
+可决定是“立刻生效”，
+还是“下期生效”？
