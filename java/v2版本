@@ -19,14 +19,101 @@ v2版本
 失效时间。
 
 佣金“提案”编号：yyyyMMddyyyyMMdd（起止时间）
+佣金“提案”实际开始时间
 
 ====
 佣金方案的生效时间
+
+区分三个时间：
+-- 佣金方案本身的生效时间（导致不合理场景，见下）
+佣金方案“绑定”的生效时间
+佣金“提案”的实际开始时间
 
 应该从代理的角度来看。
 某个时间点，（某条线）对应哪条佣金方案。
 佣金方案产生新版本时，视为自动给相关代理更换“新佣金方案”。
 
+==
+-1，
+--创建新佣金方案时，佣金方案本身立刻生效。
+-2，
+-- 佣金方案产生新版本时，
+-- 如果没有代理正在使用该方案，
+-- 则新版本立刻生效，
+-- 否则等老版本本周期结束后生效
+-- （即便某代理当前并未有佣金方案绑定，也不能立刻使用该新版本）。
+注：会导致不合理场景，见下。
+
+佣金方案生效模式：
+-- 立刻生效。
+下期生效。
+
+当老方案比新方案周期长时，
+如果选择立刻生效，则有可能需要补结算新方案若干期
+（因为从当前时间点到老方案的本期开始时间点之间，
+可能足够运行几次新方案的周期了）。
+最终结论：“下期生效”，客户更好理解。
+
+==
+场景：
+
+-1，给代理添加方案a
+
+--1，该方案处于老版本状态a1
+本期：
+使用老版本a1。
+生效时间：a1生效时间。
+失效时间：a1本周期结束时间。
+下期：
+使用新版本a2。
+生效时间：a1本周期结束时间。
+失效时间：满五年。
+
+--2，该方案处于普通状态
+本期：
+生效时间：a生效时间。
+失效时间：满五年。
+下期：
+同本期。
+
+-2，方案a产生新版本a2
+
+--1，代理继续使用该方案a
+本期：
+使用老版本a1。
+生效时间：a1生效时间。
+失效时间：a1本周期结束时间。
+下期：
+使用新版本a2。
+生效时间：a1本周期结束时间。
+失效时间：满五年。
+
+--2，代理即将更换成其它方案b
+（对该代理无影响）
+本期：
+使用老版本a1。
+生效时间：a1生效时间。
+失效时间：a1本周期结束时间。
+下期：
+使用新方案b。
+生效时间：a1本周期结束时间。
+失效时间：满五年。
+
+-3，给代理更换方案（从a更换成b）
+
+--1，a处于老版本状态a1，b处于老版本状态b1
+本期：
+使用老版本a1。
+生效时间：a1生效时间。
+失效时间：a1本周期结束时间。
+下期：
+使用b1。（问题：使用b的老版本是否合理？）
+生效时间：b1生效时间。
+失效时间：b1本周期结束时间。
+
+--2，其它三种情况，略。
+
+==
 给代理添加、更换方案（包括方案产生新版本）时：
 如果代理当前没有“有效”方案，则，
 生效时间：当前，
@@ -55,7 +142,7 @@ void addOrChangeAgentContract(Agent agent, Contract contract) {
         // 删除原来的“待生效”绑定
         dbMarkDelete_agentContract(agentContractNextOrig);
     }
-    Date effectiveStartDate = calEffectiveStartDate();
+    Date effectiveStartDate = calEffectiveStartDate(agentContractCurrent);
     //
     if (agentContractCurrent != null) {
         // 修改“老绑定”的失效时间
@@ -69,8 +156,12 @@ void addOrChangeAgentContract(Agent agent, Contract contract) {
     dbInsert_agentContract(agentContractNext);
 }
 
-Date calEffectiveStartDate() {
-
+Date calEffectiveStartDate(AgentContract agentContractCurrent) {
+    if (agentContractCurrent) {
+        return new Date();
+    }
+    // 本周期的结束时间
+    return agentContractCurrent.period(new Date()).periodEndDate;
 }
 
 // 修改佣金方案（产生新版本）
@@ -114,7 +205,7 @@ and agent_name = 'xxx';
 
 ====
 佣金方案状态：
-删除。
+删除（佣金方案的生命周期终点）。
 有效。
 -- 生效（当前），待生效（下周期生效），历史。
 
@@ -147,7 +238,23 @@ and agent_name = 'xxx';
 =》下线的贡献信息（按“实际起止时间+下线登录名”缓存）
 =》计算佣金
 
-====
-修改佣金方案的内容：
-可决定是“立刻生效”，
-还是“下期生效”？
+========
+（已废弃）
+
+某一时刻生效的佣金方案：
+（在指定时间点之前生效的，且最新的一条）
+select * from t_contract
+where contract_code = xxx
+and flag != 'delete'
+and effective_date <= #{effectiveDate}
+order by effective_date desc
+limit 0,1
+
+某一时刻某人的生效佣金方案
+（可以有多个佣金方案）：
+-- select * from t_agent_contract
+-- where agent_name = xxx
+-- and flag != 'delete'
+-- and effective_date <= #{effectiveDateEnd}
+-- order by effective_date desc
+-- limit 0,1
