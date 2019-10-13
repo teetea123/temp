@@ -1,0 +1,189 @@
+mysql事务（02）特殊案例.txt
+
+========
+《08，事务到底是隔离的还是不隔离的？.html》
+《08，图 1 事务 A、B、C 的执行流程.png》
+
+CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `k` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+insert into t(id, k)
+values
+(1,1),
+(2,2);
+
+====
+session A:
+start transaction with consistent snapshot;
+// begin/start transaction 命令并不是一个事务的起点，
+// 在执行到它们之后的第一个操作 InnoDB 表的语句（第一个快照读语句），
+// 事务才真正启动。
+// 如果你想要马上启动一个事务，
+// 可以使用 start transaction with consistent snapshot 这个命令。
+
+session B:
+start transaction with consistent snapshot;
+
+session C:
+update t set k=k+1 where id=1;
+// 更新为2，并提交
+
+session B:
+update t set k=k+1 where id=1;
+// 因为需要执行更新，所以变成“当前读”
+// 不再是“一致性读（可重复读）”
+// 更新成3
+
+select k from t where id=1;
+// 所以读到3
+
+session A:
+select k from t where id=1;
+// 因为在最一开始就启动了事务（start transaction with consistent snapshot），
+// 所以仍然读到 1
+commit;
+
+session B:
+commit;
+
+
+========
+《16，“order by”是怎么工作的？.html》
+上期问题时间。
+
+上期的问题是，当 MySQL 去更新一行，
+但是要修改的值跟原来的值是相同的，
+这时候 MySQL 会真的去执行一次修改吗？
+还是看到值相同就直接返回呢？
+
+案例一：
+
+已有数据：
+(1,2)
+
+session A:
+begin;
+update t set a=2 where id=1;
+
+session B:
+update t set a=2 where id=1;
+(blocked)
+
+第一个选项是，MySQL 读出数据，发现值与原来相同，
+不更新，直接返回，执行结束。
+这里我们可以用一个锁实验来确认。
+
+session B 的 update 语句被 blocked 了，
+加锁这个动作是 InnoDB 才能做的，所以排除选项一。
+
+teetea：需深入理解。已理解。
+
+案例二：
+
+已有数据：
+(1,2)
+
+session A:
+begin;
+select * from t where id=1;
+返回(1,2)
+
+session B:
+update t set a=3 where id=1;
+
+session A:
+update t set a=3 where id=1;
+
+query ok, 0 row affected(0.00 sec)
+rows matched:1 changed:0 warnings:0
+
+select * from t where id=1;
+返回(1,3)
+
+第二个选项是，MySQL 调用了 InnoDB 引擎提供的接口，
+但是引擎发现值与原来相同，
+不更新，直接返回。
+这里我用一个可见性实验来确认。
+
+teetea：需深入理解。已理解。
+session B 已经抢先修改并提交，
+这时，如果 session A 的 update 因为值相同而没有真正执行的话，
+相当于 session A 没有 update 语句，
+这时就不是“当前读”而是“一致性读”，
+第二个 select 应该读到 2 。
+但实际上，读到 3 ，说明 session A 有更新语句，排除选项二。
+
+所以答案是选项三，即：
+InnoDB 认真执行了“把这个值修改成 (1,2)"这个操作，
+该加锁的加锁，该更新的更新。
+
+然后你会说，MySQL 怎么这么笨，
+就不会更新前判断一下值是不是相同吗？
+如果判断一下，不就不用浪费 InnoDB 操作，多去更新一次了？
+
+其实 MySQL 是确认了的。
+只是在这个语句里面，MySQL 认为读出来的值，
+只有一个确定的 (id=1),
+而要写的是 (a=3)，
+只从这两个信息是看不出来“不需要修改”的。
+而案例三则可以确认没有改变，所以没有执行。
+
+案例三：
+
+已有数据：
+(1,2)
+
+session A:
+begin;
+select * from t where id=1;
+返回 (1,2)
+
+session B:
+update t set a=3 where id=1;
+
+session A:
+update t set a=3 where id=1 and a=3;
+query ok, 0 rows affected (0.00 sec)
+rows matched:1 changed: 0 warnings:0
+
+select * from t where id=1;
+返回(1,2)
+
+teetea：需深入理解。已理解。
+session B 已经抢先修改并提交。
+session A 的 update 可以立刻判断，所以实际没有执行。
+相当于 session A 没有 update 语句，
+这时就不是“当前读”而是“一致性读”，
+所以第二个 select 仍然读到 2 。
+
+补充说明：
+
+上面我们的验证结果都是在 binlog_format=statement 格式下进行的。
+
+@didiren 补充了一个 case，
+如果是 binlog_format=row
+并且 binlog_row_image=FULL 的时候，
+由于 MySQL 需要在 binlog 里面记录所有的字段，
+所以在读数据的时候就会把所有数据都读出来了。
+
+根据上面说的规则，“既然读了数据，就会判断”，
+因此在这时候，
+select * from t where id=1，
+结果就是“返回 (1,2)”。
+
+同理，如果是 binlog_row_image=NOBLOB,
+会读出除 blob 外的所有字段，
+在我们这个例子里，结果还是“返回 (1,2)”。
+
+对应的代码如图 15 所示。
+这是 MySQL 5.6 版本引入的，在此之前我没有看过。
+所以，特此说明。
+
+类似的，@mahonebags 同学提到了 timestamp 字段的问题。
+结论是：如果表中有 timestamp 字段而且设置了自动更新的话，
+那么更新“别的字段”的时候，
+MySQL 会读入所有涉及的字段，这样通过判断，就会发现不需要修改。
+
