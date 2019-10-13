@@ -1,0 +1,84 @@
+mysql事务（01）.txt
+
+========
+查看隔离级别：
+
+select @@global.tx_isolation, @@tx_isolation;
+
++-----------------------+-----------------+
+| @@global.tx_isolation | @@tx_isolation  |
++-----------------------+-----------------+
+| REPEATABLE-READ       | REPEATABLE-READ |
++-----------------------+-----------------+
+
+select @@session.tx_isolation;
+
+拼写速记： iso la tion
+
+========
+show variables like 'autocommit';
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| autocommit    | ON    |
++---------------+-------+
+1 row in set (0.04 sec)
+
+SET autocommit = 0;
+
+========
+========
+1，可重复读
+
+问题：
+
+可重复读，
+修改已被删除的数据，会怎样？
+如果基于旧数据插入，会怎样？
+
+《InnoDB Transaction Model（MySQL 5.7，15.5.2）（2）.txt》
+
+SELECT COUNT(c1) FROM t1 WHERE c1 = 'xyz';
+-- Returns 0: no rows match.
+DELETE FROM t1 WHERE c1 = 'xyz';
+-- Deletes several rows recently committed by other transaction.
+
+看不到，但是会删除（来自后开始先结束的事务）。
+
+SELECT COUNT(c2) FROM t1 WHERE c2 = 'abc';
+-- Returns 0: no rows match.
+UPDATE t1 SET c2 = 'cba' WHERE c2 = 'abc';
+-- Affects 10 rows: another txn just committed 10 rows with 'abc' values.
+SELECT COUNT(c2) FROM t1 WHERE c2 = 'cba';
+-- Returns 10: this txn can now see the rows it just updated.
+
+看不到，但是会更新（来自后开始先结束的事务），且更新后会看到。
+
+====
+2019-01-16
+
+《丁奇《MySQL实战45讲》08，事务到底是隔离的还是不隔离的？.html》
+
+begin/start transaction 命令并不是一个事务的起点，
+在执行到它们之后的第一个操作 InnoDB 表的语句（第一个快照读语句），
+事务才真正启动。
+
+// 如果你想要马上启动一个事务，
+// 可以使用 start transaction with consistent snapshot 这个命令。
+start transaction with consistent snapshot;
+
+
+事务中，进行更新操作时，会变成“当前读”，
+而不再是“可重复读”。
+
+《丁奇《MySQL实战45讲》20，幻读是什么，幻读有什么问题？.html》
+一个事务修改了某行，被另一个事务使用“当前读”读到，不属于“幻读”。
+“幻读”专指“新插入的行（幻行）”。
+
+========
+2，
+
+《InnoDB Transaction Model（MySQL 5.7，15.5.2）（2）.txt》
+如果表被删除，无法一致读。
+如果表定义被修改，无法一致读。
+
